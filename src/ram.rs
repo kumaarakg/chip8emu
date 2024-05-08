@@ -45,7 +45,7 @@ impl Ram {
         self.mem[address as usize]=value;
     }
 
-    pub fn read_byte(&mut self, address: u16, value: u8) -> u8{
+    pub fn read_byte(&mut self, address: u16) -> u8{
         // Implementation goes here
         self.mem[address as usize]
     }
