@@ -1,15 +1,17 @@
 pub const PROGRAM_START: u16=0x200;
 
+
 use std::fmt::{self, write};
 
-use crate::ram::{self, Ram};
+use crate::bus::Bus;
 
 
 pub struct Cpu{
     vx:[u8;16],
     pc: u16,
     i: u16,
-    prev_pc: u16
+    prev_pc: u16,
+    ret_stack: Vec<u16>
 }
  
 impl Cpu{
@@ -19,17 +21,18 @@ impl Cpu{
             vx: [0;16],
             pc: PROGRAM_START,
             i: 0,
-            prev_pc: 0
+            prev_pc: 0,
+            ret_stack: Vec::<u16>::new()
         }
     }
-    pub fn run_instruction(&mut self, ram: &mut Ram) {
+    pub fn run_instruction(&mut self, bus: &mut Bus) {
         
 
-        let hi=ram.read_byte(self.pc) as u16;
-        let lo=ram.read_byte(self.pc+1) as u16;
+        let hi=bus.ram_read_byte(self.pc) as u16;
+        let lo=bus.ram_read_byte(self.pc+1) as u16;
         let instruction=(hi<<8)|lo;
         
-        println!("instruction read {:#x} hi:{:#x} lo:{:#x}",instruction,hi,lo);
+        println!("instruction read {:#x}:{:#x} hi:{:#x} lo:{:#x}",self.pc,instruction,hi,lo);
         
         let nnn=instruction & 0x0FFF;
         let nn=(instruction&0x0FF)as u8;
@@ -45,10 +48,33 @@ impl Cpu{
         }
         self.prev_pc=self.pc;
         match (instruction & 0xF000)>>12{
+            0x0 => {
+                match nn{
+                    0xE0 => {
+                        bus.clear_screen();
+                        self.pc+=2;
+                    },
+                    OxEE =>{
+                        //return from subroutine
+                        let addr=self.ret_stack.pop().unwrap();
+                        self.pc=addr;
+                    }
+
+                    _ => panic!("unrecognised 0x8XY* instruction {:#x}:{:#x}",self.pc,instruction)
+                    
+                    
+                }
+            }
             0x1 => {
                 //goto nnn;
                 self.pc=nnn;
 
+            },
+            0x2 => {
+                //call subroutine at address NNN
+
+                self.ret_stack.push(self.pc + 2);
+                self.pc=nnn;
             },
             0x3=> {
                 //if(Vx==NN)
@@ -71,11 +97,89 @@ impl Cpu{
                 self.write_reg_vx(x, vx.wrapping_add(nn));
                 self.pc+=2;
             },
+            0x8 => {
+                let vx=self.read_reg_vx(x);
+                let vy=self.read_reg_vx(y);
+                match n{
+                    
+                    0 =>{
+                        //vx=vy
+                        
+                        self.write_reg_vx(x, vy);
+                        
+                    },
+                    2 => {
+                        //Vx=Vx&Vy
+                      
+                        
+                        self.write_reg_vx(x, vx&vy);
+                    },
+                    3 => {
+                        //Vx=vx^Vy
+                        self.write_reg_vx(x, vx^vy);
+
+                    },
+                    4 => {
+                        //Vx+=Vy
+                        let sum=vx as u16 + vy as u16;
+                        self.write_reg_vx(x, sum as u8);
+                        if sum > 0xFF {
+                            self.write_reg_vx(0xFF, 1);
+                        }
+                    },
+                    5 => {
+                        //Vx-=Vy
+                        let diff=vx as i8 - vy as i8;
+                        self.write_reg_vx(x, diff as u8);
+
+                        if diff<0 {
+                            self.write_reg_vx(0xFF, 1);
+                        }
+
+                    },
+                    6 => {
+                        // Vx=Vy=Vy>>1
+                        self.write_reg_vx(0xF, vy & 0x1);
+                        self.write_reg_vx(y, vy >> 1);
+                        self.write_reg_vx(x, vy >> 1);
+                    },
+                   
+                    _ => panic!("unrecognised 0x8XY* instruction {:#x}:{:#x}",self.pc,instruction)
+                };
+                self.pc+=2;
+            }
             0xD => {
                 //draw(Vx,Vy,N)
-                self.debug_draw_sprite(ram,x,y,n);
+                self.debug_draw_sprite(bus,x,y,n);
                 self.pc+=2;
 
+            },
+            0xE => {
+                match nn {
+                    0xA1=>{
+                        
+                        //if(key()!=Vx) then skip the next instruction
+                        let key=self.read_reg_vx(x);
+                        if !bus.key_pressed(key){
+                            self.pc+=4;
+
+                        }else{
+                            self.pc+=2;
+                        }
+
+                    },
+                    0x9E=>{
+                        
+                        //if(key()==Vx) then skip the next instruction
+                        let key=self.read_reg_vx(x);
+                        if bus.key_pressed(key){
+                            self.pc+=4;
+                        }else{
+                            self.pc+=2;
+                        }
+                    },
+                    _ => panic!("unrecognised 0xEX** instruction {:#x}:{:#x}",self.pc,instruction)
+                };
             },
 
             0xA =>{
@@ -100,22 +204,23 @@ impl Cpu{
     }
 
 
-    fn debug_draw_sprite(&self,ram: &mut Ram,x: u8,y: u8,height: u8){
+    fn debug_draw_sprite(&mut self,bus: &mut Bus,x: u8,y: u8,height: u8){
         println!("Drawing sprite at ({},{})",x,y);
+        
+       let mut should_set_vf=false;
         for y in 0..height{
-            let mut b=ram.read_byte(self.i+y as u16);
-            for _ in 0..8{
-                match (b & 0b1000_0000)>>7{
-                    0=> print!(" "),
-                    1=> print!("#"),
-                    _=>unreachable!()
-                }
-                b=b<<1;
+            let b=bus.ram_read_byte(self.i+y as u16);
+            if bus.debug_draw_byte(b,x,y) {
+                should_set_vf=true;
             }
-            print!("\n");
-
+            
         }
-        print!("\n");
+        if should_set_vf{
+            self.write_reg_vx(0xF, 0);
+        }else{
+            self.write_reg_vx(0xF, 0);
+        }
+        //bus.present_screen();
 
     }
 
