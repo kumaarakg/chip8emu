@@ -6,7 +6,7 @@ impl Ram {
     pub fn new() -> Ram {
         let mut ram = Ram { mem: [0; 4096] };
 
-        // Sprite data
+        // initialise memory with rpe defined sprites from 0 to f
         let sprites: [[u8; 5]; 16] = [
             [0xF0, 0x90, 0x90, 0x90, 0xF0], //0
             [0x20, 0x60, 0x20, 0x20, 0x70], //1
