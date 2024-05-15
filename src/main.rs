@@ -8,6 +8,7 @@ mod cpu;
 mod display;
 mod keyboard;
 mod bus;
+use display::Display;
 
 
 fn main(){
@@ -47,7 +48,18 @@ fn main(){
         let chip8_buffer=chip8.get_display_buffer();
 
         
-        
+        for y in 0..HEIGHT{
+            for x in 0..WIDTH{
+                let index=Display::get_index_from_coords(x/10, y/10);
+                let pixel=chip8_buffer[index];
+                let color_pixel=match pixel{
+                    0=>0x0,
+                    1=>0xffffff,
+                    _=>unreachable!()
+                };
+                buffer[y*WIDTH+x]=color_pixel;
+            }
+        }
         
         
         window.update_with_buffer(&buffer, WIDTH, HEIGHT).unwrap();
