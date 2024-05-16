@@ -78,6 +78,16 @@ impl Cpu{
                 } else {
                     self.pc += 2;
                 }
+            } 
+            0x4 => {
+                //skip next instruction if Vx!=NN
+                let vx=self.read_reg_vx(x);
+                if vx!=nn{
+                    self.pc+=4;
+
+                }else{
+                    self.pc+=2;
+                }
             }
             0x6 => {
                 //vx = nn
@@ -195,6 +205,10 @@ impl Cpu{
                     0x15 => {
                         bus.set_delay_timer(self.read_reg_vx(x));
                         self.pc += 2;
+                    },
+                    0x18 =>{
+                        //todo: soun timer, but will never do it
+                        self.pc+=2;
                     },
                     0x65 => {
                         for index in 0..x+1 {

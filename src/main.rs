@@ -69,7 +69,7 @@ fn main(){
 
     while window.is_open() && !window.is_key_down(Key::Escape) {
 
-        let keys_pressed=window.get_keys_pressed(KeyRepeat::No);
+        let keys_pressed=window.get_keys_pressed(KeyRepeat::Yes);
         let key=match keys_pressed {
             keys =>{ 
                 if keys.len()>0{
@@ -100,8 +100,7 @@ fn main(){
                 buffer[y*WIDTH+x]=color_pixel;
             }
         }
-        // std::thread::sleep(Duration::from_millis(16));
-
+        
         window.update_with_buffer(&buffer, WIDTH, HEIGHT).unwrap();
     }
    
