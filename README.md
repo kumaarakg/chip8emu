@@ -10,7 +10,7 @@ A CHIP-8 emulator in Rust is a software program that mimics the behavior of the 
 ## Requirements
  Make sure you have Rust and Cargo installed
 
-##Usage
+## Usage
 
 clone this repository and run the command
 
